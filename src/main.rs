@@ -29,7 +29,10 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Run the cache locality test
     Test(TestArgs),
+
+    /// Plot results from a generated csv file
     Plot(PlotArgs),
 }
 
@@ -43,7 +46,7 @@ struct TestArgs {
     #[clap(short = 'd', long, default_value_t = 1)]
     initial_step_size: usize,
 
-    /// Maximum step size. Must be >= --initial-step_size
+    /// Maximum step size. Must be >= --initial-step-size
     #[clap(short, long)]
     max_step_size: Option<usize>,
 
