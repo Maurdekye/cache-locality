@@ -89,7 +89,7 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
         for (steps, should_print) in Observer::new_with(
             Duration::from_millis(100),
             Options {
-                first_checkpoint: 1000,
+                first_checkpoint: 100_000,
                 ..Default::default()
             },
         )
@@ -132,6 +132,7 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
                 total_duration_millis,
                 steps_per_second,
             })?;
+            out.flush()?;
         }
         step_size <<= 1;
     }
