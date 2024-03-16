@@ -1,18 +1,40 @@
 #![feature(iterator_try_collect)]
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use csv::Reader;
+use plotters::prelude::*;
 use progress_observer::prelude::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
-    fs::File,
     io::{stdout, Write},
     path::PathBuf,
     time::{Duration, Instant, SystemTime},
 };
 
+#[derive(Serialize, Deserialize)]
+struct Record {
+    start_time: u128,
+    step_size: u64,
+    total_duration_millis: u128,
+    steps_per_second: f32,
+}
+
 #[derive(Parser)]
 struct Args {
+    #[command(subcommand)]
+    subcommand: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    Test(TestArgs),
+    Plot(PlotArgs),
+}
+
+#[derive(Parser)]
+struct TestArgs {
     /// Amount of memory to allocate for test
     #[clap(short, long, default_value_t = 1024 * 1024 * 1024)]
     total_size: usize,
@@ -34,22 +56,27 @@ struct Args {
     out: Option<PathBuf>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let args = Args::parse();
+#[derive(Parser)]
+struct PlotArgs {
+    /// File containing test data to plot
+    data_file: PathBuf,
 
+    /// Output image to save plot to
+    out_img: Option<PathBuf>,
+}
+
+fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
     println!("Allocating random data");
     let mem: Vec<u8> = (0..args.total_size)
         .into_par_iter()
         .map(|_| rand::random())
         .collect();
 
-    let mut out = args.out.map(|out| File::create(out)).transpose()?;
-    if let Some(out) = &mut out {
-        writeln!(
-            out,
-            "start_time,step_size,total_duration_millis,steps_per_second"
-        )?;
-    }
+    let mut out = args
+        .out
+        .as_ref()
+        .map(|out| csv::Writer::from_path(out))
+        .transpose()?;
 
     let max_step_size = args.max_step_size.unwrap_or(args.total_size);
     let mut step_size = args.initial_step_size;
@@ -97,34 +124,34 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_millis();
+            let step_size = step_size as u64;
             let total_duration_millis = total_duration.as_millis();
-            writeln!(
-                out,
-                "{start_time},{step_size},{total_duration_millis},{steps_per_second}"
-            )?;
+            out.serialize(Record {
+                start_time,
+                step_size,
+                total_duration_millis,
+                steps_per_second,
+            })?;
         }
         step_size <<= 1;
+    }
+    println!("Finished running tests");
+    if let Some(out) = &args.out {
+        println!("Saved results to {}", out.to_string_lossy());
     }
 
     Ok(())
 }
 
-#[test]
-fn plot() -> Result<(), Box<dyn Error>> {
-    use csv::Reader;
-    use plotters::prelude::*;
-    use serde::Deserialize;
+fn plot_data(args: PlotArgs) -> Result<(), Box<dyn Error>> {
+    let out_img = args
+        .out_img
+        .unwrap_or_else(|| args.data_file.with_extension("png"));
 
-    #[allow(unused)]
-    #[derive(Deserialize)]
-    struct Record {
-        start_time: u128,
-        step_size: u64,
-        total_duration_millis: u128,
-        steps_per_second: f64,
-    }
+    let data: Vec<Record> = Reader::from_path(args.data_file)?
+        .deserialize()
+        .try_collect()?;
 
-    let data: Vec<Record> = Reader::from_path("data.csv")?.deserialize().try_collect()?;
     let min_x = data
         .iter()
         .map(|record| record.step_size)
@@ -135,25 +162,19 @@ fn plot() -> Result<(), Box<dyn Error>> {
         .map(|record| record.step_size)
         .max()
         .ok_or("No data")?;
-    let min_y = data
-        .iter()
-        .map(|record| record.steps_per_second)
-        .min_by(|a, b| a.total_cmp(b))
-        .ok_or("No data")?
-        .min(0.0);
     let max_y = data
         .iter()
         .map(|record| record.steps_per_second)
         .max_by(|a, b| a.total_cmp(b))
         .ok_or("No data")?;
 
-    let root = BitMapBackend::new("plot.png", (1024, 1024)).into_drawing_area();
+    let root = BitMapBackend::new(&out_img, (1024, 1024)).into_drawing_area();
     root.fill(&WHITE)?;
     let mut plot = ChartBuilder::on(&root)
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(100)
-        .build_cartesian_2d((min_x..max_x).log_scale(), min_y..max_y)?;
+        .build_cartesian_2d((min_x..max_x).log_scale(), 0.0..max_y)?;
 
     plot.configure_mesh().draw()?;
 
@@ -165,5 +186,15 @@ fn plot() -> Result<(), Box<dyn Error>> {
 
     root.present()?;
 
+    println!("Saved plot to {}", out_img.to_string_lossy());
+
     Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+    match args.subcommand {
+        Command::Test(args) => run_test(args),
+        Command::Plot(args) => plot_data(args),
+    }
 }
