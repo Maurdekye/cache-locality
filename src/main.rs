@@ -1,3 +1,4 @@
+#![feature(iterator_try_collect)]
 use clap::Parser;
 use progress_observer::prelude::*;
 use rand::{thread_rng, Rng};
@@ -104,6 +105,65 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         step_size <<= 1;
     }
+
+    Ok(())
+}
+
+#[test]
+fn plot() -> Result<(), Box<dyn Error>> {
+    use csv::Reader;
+    use plotters::prelude::*;
+    use serde::Deserialize;
+
+    #[allow(unused)]
+    #[derive(Deserialize)]
+    struct Record {
+        start_time: u128,
+        step_size: u64,
+        total_duration_millis: u128,
+        steps_per_second: f64,
+    }
+
+    let data: Vec<Record> = Reader::from_path("data.csv")?.deserialize().try_collect()?;
+    let min_x = data
+        .iter()
+        .map(|record| record.step_size)
+        .min()
+        .ok_or("No data")?;
+    let max_x = data
+        .iter()
+        .map(|record| record.step_size)
+        .max()
+        .ok_or("No data")?;
+    let min_y = data
+        .iter()
+        .map(|record| record.steps_per_second)
+        .min_by(|a, b| a.total_cmp(b))
+        .ok_or("No data")?
+        .min(0.0);
+    let max_y = data
+        .iter()
+        .map(|record| record.steps_per_second)
+        .max_by(|a, b| a.total_cmp(b))
+        .ok_or("No data")?;
+
+    let root = BitMapBackend::new("plot.png", (1024, 1024)).into_drawing_area();
+    root.fill(&WHITE)?;
+    let mut plot = ChartBuilder::on(&root)
+        .margin(5)
+        .x_label_area_size(30)
+        .y_label_area_size(100)
+        .build_cartesian_2d((min_x..max_x).log_scale(), min_y..max_y)?;
+
+    plot.configure_mesh().draw()?;
+
+    plot.draw_series(LineSeries::new(
+        data.iter()
+            .map(|record| (record.step_size, record.steps_per_second)),
+        RED,
+    ))?;
+
+    root.present()?;
 
     Ok(())
 }
