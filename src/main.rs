@@ -64,7 +64,8 @@ struct PlotArgs {
     /// File containing test data to plot
     data_file: PathBuf,
 
-    /// Output image to save plot to
+    /// Output image to save plot to [default same as input file with .png extension]
+    #[clap(short, long)]
     out_img: Option<PathBuf>,
 }
 
@@ -89,6 +90,10 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
         let mut sum: u8 = 0;
         let mut position: usize = 0;
         let initial_time = Instant::now();
+        let start_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         for (steps, should_print) in Observer::new_with(
             Duration::from_millis(100),
             Options {
@@ -123,10 +128,6 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
             "\rCompleted testing: took {total_duration_float:.3} secs, with an average access rate of {steps_per_second:.2} steps/sec. sum: {sum}"
         );
         if let Some(out) = &mut out {
-            let start_time = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis();
             let step_size = step_size as u64;
             let total_duration_millis = total_duration.as_millis();
             out.serialize(Record {
