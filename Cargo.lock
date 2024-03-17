@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "progress-observer"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f98044f84a3ff68d0f92b2783e69e5d0699b44d807f33ceedbb2443e49e05d85"
+checksum = "d91307e3ace8f7f223ac43a90533ba420fc5f1f2a899feaaaaf2b2d6aa9d9250"
 
 [[package]]
 name = "quote"

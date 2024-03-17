@@ -92,20 +92,14 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
         println!("Testing step size {step_size}");
         let mut sum: u8 = 0;
         let mut position: usize = 0;
-        let initial_time = Instant::now();
+        let start_instant = Instant::now();
         let start_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_millis();
-        for (steps, should_print) in Observer::new_with(
-            Duration::from_millis(100),
-            Options {
-                first_checkpoint: 100_000,
-                ..Default::default()
-            },
-        )
-        .take(args.iterations)
-        .enumerate()
+        for (steps, should_print) in Observer::new_starting_at(Duration::from_millis(100), 100_000)
+            .take(args.iterations)
+            .enumerate()
         {
             let step: usize = rng.gen();
             let step = step % step_size;
@@ -117,14 +111,14 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
             position %= args.total_size;
             sum = sum.wrapping_add(mem[position]);
             if should_print {
-                let current_time = Instant::now();
-                let duration = current_time.duration_since(initial_time).as_secs_f32();
+                let now = Instant::now();
+                let duration = now.duration_since(start_instant).as_secs_f32();
                 let steps_per_second = (steps as f32) / duration;
                 print!("\r{steps_per_second:.2} steps/sec");
                 stdout().flush().unwrap();
             }
         }
-        let total_duration = Instant::now().duration_since(initial_time);
+        let total_duration = Instant::now().duration_since(start_instant);
         let total_duration_float = total_duration.as_secs_f32();
         let steps_per_second = (args.iterations as f32) / total_duration_float;
         println!(
