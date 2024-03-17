@@ -46,7 +46,7 @@ struct TestArgs {
     #[clap(short = 'd', long, default_value_t = 1)]
     initial_step_size: usize,
 
-    /// Maximum step size. Must be >= --initial-step-size
+    /// Maximum step size. Must be >= --initial-step-size & <= --total-size [default same as --total-size]
     #[clap(short, long)]
     max_step_size: Option<usize>,
 
@@ -82,7 +82,10 @@ fn run_test(args: TestArgs) -> Result<(), Box<dyn Error>> {
         .map(|out| csv::Writer::from_path(out))
         .transpose()?;
 
-    let max_step_size = args.max_step_size.unwrap_or(args.total_size);
+    let max_step_size = args
+        .max_step_size
+        .unwrap_or(args.total_size)
+        .clamp(args.initial_step_size, args.total_size);
     let mut step_size = args.initial_step_size;
     let mut rng = thread_rng();
     while step_size <= max_step_size {
